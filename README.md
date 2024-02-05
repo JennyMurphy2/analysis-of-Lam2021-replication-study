@@ -1,1 +1,1 @@
-# analysis-of-Lam2021-replication-study
+This repository is part of a large replication project conducted by the Sports Science Replication Centre (https://ssreplicationcentre.com/). It includes the data and analyses for the replication study of "Effect of consecutive jumping trials on metatarsophalangeal, ankle, and knee biomechanics during take-off and landing" by Lam et al (2021).
