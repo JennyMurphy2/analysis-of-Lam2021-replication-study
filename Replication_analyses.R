@@ -52,6 +52,7 @@ rep_desc <- rep_data_long %>%
             sd = sd(landing_grf)) %>%
   mutate(mean_diff = mean(rep_data_long$differences), 
          sd_diff = sd(rep_data_long$differences))
+rep_desc
 
 ## Resolving assumptions  ---------------------------------------
 
@@ -112,6 +113,12 @@ ggplot(normal_data, aes(conditions, landing_grf, color = conditions)) +
 
 # Paired t-test  -----------------------------
 
+normal_data$conditions <- as.factor(normal_data$conditions)
+
+# R compares conditions alphabetically, I am reordering here to match the original study
+
+normal_data$conditions <- forcats::fct_relevel(normal_data$conditions, "scmj","cmj")
+
 replication_ttest <- t.test(landing_grf ~ conditions, normal_data, 
                   alternative = "two.sided", paired = TRUE, conf.level = 0.95) %>%
   tidy()
@@ -122,9 +129,11 @@ replication_ttest
 rep_dz <- d.dep.t.diff.t(t = replication_ttest$statistic, n = rep_desc_normal$count[1], a = 0.05)
 rep_dz
 
-### Original study values ------
+## Calculate Original ES --------
 
-ori_study <- data.frame(
+#Original descriptives
+
+ori_values <- data.frame(
   ori_pval = 0.00099,
   ori_N = 18,
   reported_es = 1.35,
@@ -134,15 +143,41 @@ ori_study <- data.frame(
   ori_m2 = 2.09,
   ori_sd2 = 0.41)
 
-# Replication analyses - z-test --------
+# Estimating the t-value
+
+quantile = 1 - ori_values$ori_pval/2 # for two-tailed
+
+ori_tval <- qt(quantile, df = 17)
+
+# Estimating the original effect size
+
+ori_dz <- d.dep.t.diff.t(t = ori_tval, n = ori_values$ori_N, a = 0.05)
+ori_dz
+
+ori_dav <- d.dep.t.avg(m1 = ori_values$ori_m1, m2 = ori_values$ori_m2, 
+                       sd1 = ori_values$ori_sd1, sd2 = ori_values$ori_sd2, 
+                       n = ori_values$ori_N, a = 0.05)
+ori_dav
+
+# Replication analyses - z-test (reported es) --------
 
 rep_test <- compare_smd(
-  smd1 = ori_study$reported_es,
-  n1 = ori_study$ori_N,
-  smd2 = -rep_dz$d,
+  smd1 = ori_values$reported_es,
+  n1 = ori_values$ori_N,
+  smd2 = rep_dz$d,
   n2 = rep_desc$count[1],
   paired = TRUE,
   alternative = "greater")
 rep_test
 
+# Replication analyses - z-test (dz) --------
+
+rep_test <- compare_smd(
+  smd1 = ori_dz$d,
+  n1 = ori_values$ori_N,
+  smd2 = rep_dz$d,
+  n2 = rep_desc$count[1],
+  paired = TRUE,
+  alternative = "greater")
+rep_test
 
