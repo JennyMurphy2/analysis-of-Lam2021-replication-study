@@ -6,80 +6,83 @@ library(MOTE)
 library(tidyverse)
 library(janitor)
 
-# Replication data loading and prep ---------------------
-rep_data <- read_csv("replication_landing_GRF.csv")
+set.seed(21)
+
+# Replication data load
+
+rep_data <- read_csv("replication_dataLanding.csv") %>%
+  clean_names() %>%
+  mutate(trials)
 head(rep_data)
 
-rep_data <- rep_data %>%
-  clean_names()
+# Peak landing GRF --------------
 
-# Convert to wide dataset
-
-rep_data_wide <-  pivot_wider(
-    data = rep_data,
-    id_cols = id, # identifying column(s)
-    names_from = c("trials", "conditions"), # the new column names
-    values_from = landing_grf # the new column values
-  ) 
-
-rep_data_wide <- rep_data_wide %>%
-  clean_names()
+grf_data_wide <-  pivot_wider(
+  data = rep_data,
+  id_cols = id, # identifying column(s)
+  names_from = c("trials", "conditions"), # the new column names
+  values_from = vertical_grf # the new column values
+) 
 
 # create a new variable for the mean of trials 2 - 5 as per the original study
- rep_data_wide <-  rep_data_wide %>%
-   mutate(cmj = rowMeans(select(rep_data_wide, x2_cmj, x3_cmj, x4_cmj, x5_cmj)),
-          scmj = rowMeans(select(rep_data_wide, x2_scmj, x3_scmj, x4_scmj, x5_scmj)))
+
+grf_data_wide <-  grf_data_wide %>%
+  rowwise() %>%
+  mutate(single = mean(c(`1_single`,`2_single`, `3_single`, 
+                         `4_single`, `5_single`, `6_single`)),
+         consecutive = mean(c(`1_consecutive`,`2_consecutive`, `3_consecutive`, 
+                              `4_consecutive`, `5_consecutive`, `6_consecutive`))) 
 
 # add differences column to wide dataset
 
-rep_data_wide <- rep_data_wide %>% 
-  select(id, cmj, scmj) %>%
-  mutate(differences =  scmj - cmj) 
+grf_data_wide <- grf_data_wide %>% 
+  select(id, single, consecutive) %>%
+  mutate(differences =  single - consecutive) 
 
 # long dataset
 
-rep_data_long <- rep_data_wide %>% 
-  pivot_longer(cols = c("scmj", "cmj"),
+grf_data_long <- grf_data_wide %>% 
+  pivot_longer(cols = c("single", "consecutive"),
                names_to = "conditions",
-               values_to = "landing_grf")
+               values_to = "vertical_grf")
 
-## Replication descriptives  ---------------
+## Descriptives  ---------------
 
-rep_desc <- rep_data_long %>%
+desc <- grf_data_long %>%
   group_by(conditions) %>%
   summarise(count = n(),
-            mean = mean(landing_grf),
-            sd = sd(landing_grf)) %>%
-  mutate(mean_diff = mean(rep_data_long$differences), 
-         sd_diff = sd(rep_data_long$differences))
-rep_desc
+            mean = mean(vertical_grf),
+            sd = sd(vertical_grf)) %>%
+  mutate(mean_diff = mean(grf_data_long$differences), 
+         sd_diff = sd(grf_data_long$differences))
+desc
 
 ## Resolving assumptions  ---------------------------------------
 
 ## Distribution check 
 
-ggplot(rep_data_long, aes(landing_grf)) +
+ggplot(grf_data_long, aes(vertical_grf)) +
   geom_histogram(color="black", fill="white", 
                  bins = 10)
 
-ggplot(rep_data_long, aes(conditions, landing_grf, color = conditions)) +
+ggplot(grf_data_long, aes(conditions, vertical_grf, color = conditions)) +
   geom_boxplot(show.legend = FALSE) +
   theme_minimal()
 
 ### Outliers check 
 
-rep_data_long %>%
+grf_data_long %>%
   identify_outliers(differences)
 
 ### Normality check  
 
-rep_data_long %>% shapiro_test(differences) 
+grf_data_long %>% shapiro_test(differences) 
 
 ### Outlier removal ---------
 
 # remove outlier for normal data
 
-normal_data <- rep_data_long %>%
+normal_data <- grf_data_long %>%
   filter(id != 40)
 
 ### Outliers check 
@@ -91,22 +94,22 @@ normal_data %>%
 
 normal_data %>% shapiro_test(differences) 
 
-rep_desc_normal <- normal_data %>%
+desc_normal <- normal_data %>%
   group_by(conditions) %>%
   summarise(count = n(),
-            mean = mean(landing_grf),
-            sd = sd(landing_grf)) %>%
-  mutate(mean_diff = mean(rep_data_long$differences), 
-         sd_diff = sd(rep_data_long$differences))
-rep_desc_normal
+            mean = mean(vertical_grf),
+            sd = sd(vertical_grf)) %>%
+  mutate(mean_diff = mean(normal_data$differences), 
+         sd_diff = sd(normal_data$differences))
+desc_normal
 
 ### Distribution check
 
-ggplot(normal_data, aes(landing_grf)) +
+ggplot(normal_data, aes(vertical_grf)) +
   geom_histogram(color="black", fill="white", 
                  bins = 10)
 
-ggplot(normal_data, aes(conditions, landing_grf, color = conditions)) +
+ggplot(normal_data, aes(conditions, vertical_grf, color = conditions)) +
   geom_boxplot(show.legend = FALSE) +
   theme_minimal()
 
@@ -117,16 +120,16 @@ normal_data$conditions <- as.factor(normal_data$conditions)
 
 # R compares conditions alphabetically, I am reordering here to match the original study
 
-normal_data$conditions <- forcats::fct_relevel(normal_data$conditions, "scmj","cmj")
+normal_data$conditions <- forcats::fct_relevel(normal_data$conditions, "single", "consecutive")
 
-replication_ttest <- t.test(landing_grf ~ conditions, normal_data, 
+normal_replication_ttest <- t.test(vertical_grf ~ conditions, normal_data, 
                   alternative = "two.sided", paired = TRUE, conf.level = 0.95) %>%
   tidy()
-replication_ttest
+normal_replication_ttest
 
 ### Replication effect size calculation ------
 
-rep_dz <- d.dep.t.diff.t(t = replication_ttest$statistic, n = rep_desc_normal$count[1], a = 0.05)
+rep_dz <- d.dep.t.diff.t(t = normal_replication_ttest$statistic, n = desc_normal$count[1], a = 0.05)
 rep_dz
 
 ## Calculate Original ES --------
@@ -143,15 +146,9 @@ ori_values <- data.frame(
   ori_m2 = 2.09,
   ori_sd2 = 0.41)
 
-# Estimating the t-value
-
-quantile = 1 - ori_values$ori_pval/2 # for two-tailed
-
-ori_tval <- qt(quantile, df = 17)
-
 # Estimating the original effect size
 
-ori_dz <- d.dep.t.diff.t(t = ori_tval, n = ori_values$ori_N, a = 0.05)
+ori_dz <- d.dep.t.diff.t(t = ori_values$t_val, n = ori_values$ori_N, a = 0.05)
 ori_dz
 
 ori_dav <- d.dep.t.avg(m1 = ori_values$ori_m1, m2 = ori_values$ori_m2, 
@@ -159,25 +156,24 @@ ori_dav <- d.dep.t.avg(m1 = ori_values$ori_m1, m2 = ori_values$ori_m2,
                        n = ori_values$ori_N, a = 0.05)
 ori_dav
 
-# Replication analyses - z-test (reported es) --------
-
-rep_test <- compare_smd(
-  smd1 = ori_values$reported_es,
-  n1 = ori_values$ori_N,
-  smd2 = rep_dz$d,
-  n2 = rep_desc$count[1],
-  paired = TRUE,
-  alternative = "greater")
-rep_test
-
-# Replication analyses - z-test (dz) --------
+# Z-test (dz) --------
 
 rep_test <- compare_smd(
   smd1 = ori_dz$d,
   n1 = ori_values$ori_N,
   smd2 = rep_dz$d,
-  n2 = rep_desc$count[1],
+  n2 = desc_normal$count[1],
   paired = TRUE,
   alternative = "greater")
 rep_test
 
+# Z-test (reported es) --------
+
+rep_test <- compare_smd(
+  smd1 = ori_values$reported_es,
+  n1 = ori_values$ori_N,
+  smd2 = rep_dz$d,
+  n2 = desc_normal$count[1],
+  paired = TRUE,
+  alternative = "greater")
+rep_test
