@@ -122,15 +122,26 @@ normal_data$conditions <- as.factor(normal_data$conditions)
 
 normal_data$conditions <- forcats::fct_relevel(normal_data$conditions, "single", "consecutive")
 
-normal_replication_ttest <- t.test(vertical_grf ~ conditions, normal_data, 
-                  alternative = "two.sided", paired = TRUE, conf.level = 0.95) %>%
-  tidy()
+#normal_replication_ttest <- t.test(vertical_grf ~ conditions, normal_data, 
+#                  alternative = "two.sided", paired = TRUE, conf.level = 0.95) %>%
+#  tidy()
+#normal_replication_ttest
+
+normal_data_wide <- grf_data_wide %>%
+  filter(id != 40)
+
+normal_replication_ttest <- t.test(normal_data_wide$single, normal_data_wide$consecutive, paired = TRUE)
 normal_replication_ttest
 
 ### Replication effect size calculation ------
 
 rep_dz <- d.dep.t.diff.t(t = normal_replication_ttest$statistic, n = desc_normal$count[1], a = 0.05)
 rep_dz
+
+rep_dav <- d.dep.t.avg(m1 = desc_normal$mean[2], m2 = desc_normal$mean[1], 
+                       sd1 = desc_normal$sd[2], sd2 = desc_normal$sd[1], 
+                       n = desc_normal$count[1], a = 0.05)
+rep_dav
 
 ## Calculate Original ES --------
 
@@ -172,7 +183,7 @@ rep_test
 rep_test <- compare_smd(
   smd1 = ori_values$reported_es,
   n1 = ori_values$ori_N,
-  smd2 = rep_dz$d,
+  smd2 = rep_dav$d,
   n2 = desc_normal$count[1],
   paired = TRUE,
   alternative = "greater")
